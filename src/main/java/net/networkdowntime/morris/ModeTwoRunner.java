@@ -8,6 +8,7 @@ import org.apache.http.entity.ContentType;
 import org.apache.http.impl.client.BasicCookieStore;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.springframework.util.StringUtils;
 
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -64,27 +65,29 @@ public class ModeTwoRunner {
     List<GameState> allOpenGames = new ArrayList<GameState>();
     List<GameState> myOpenGames = new ArrayList<GameState>();
     int myOpenGameCount = 0;
+    String username;
 
     public ModeTwoRunner(String username, String password, String server) {
         objectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
-
         this.server = server;
+        this.username = username;
+
         do {
             switch (state) {
                 case LoggedOut:
-                    state = doLogin(username, password);
+                    state = doLogin(password);
                     break;
                 case GamePolling:
                     state = doGamePolling();
                     break;
                 case GamePlaying:
-                    state = doGamePlaying(username);
+                    state = doGamePlaying();
                     break;
                 case JoinGame:
-                    state = doJoinGame(username);
+                    state = doJoinGame();
                     break;
                 case NewGame:
-                    state = doNewGame(username);
+                    state = doNewGame();
                     break;
                 case OpenGame:
                     state = doOpenGame();
@@ -100,8 +103,21 @@ public class ModeTwoRunner {
         } while (true);
     }
 
+    private boolean isAutomated(GameState gs) {
+        return (gs.isPlayerOnesTurn && username.equals(gs.playerOneUsername) && gs.playerOneIsAutomated && StringUtils.isEmpty(gs.playerOneAiEndpoint)) // 
+                || (!gs.isPlayerOnesTurn && username.equals(gs.playerTwoUsername) && gs.playerTwoIsAutomated && StringUtils.isEmpty(gs.playerTwoAiEndpoint));
+    }
+
+    private boolean isPlayerOne(GameState gs) {
+        return (gs.isPlayerOnesTurn && username.equals(gs.playerOneUsername) && gs.playerOneIsAutomated && StringUtils.isEmpty(gs.playerOneAiEndpoint));
+    }
+
+    private boolean isPlayerTwo(GameState gs) {
+        return (!gs.isPlayerOnesTurn && username.equals(gs.playerTwoUsername) && gs.playerTwoIsAutomated && StringUtils.isEmpty(gs.playerTwoAiEndpoint));
+    }
+
     // Logged Out State: Wrapper POSTs a login request on startup, tracks the sessionId or cookie, them moves to the Game Polling State.
-    private State doLogin(String username, String password) {
+    private State doLogin(String password) {
         int failCount = 0;
         LoginRequest loginRequest = new LoginRequest();
         loginRequest.username = username;
@@ -147,7 +163,7 @@ public class ModeTwoRunner {
 
             activeGames.clear();
             for (GameState gs : games)
-                if (gs != null) activeGames.add(gs);
+                if (gs != null && isAutomated(gs)) activeGames.add(gs);
 
             if (activeGames.isEmpty()) return State.OpenGame;
             else return State.GamePlaying;
@@ -165,7 +181,7 @@ public class ModeTwoRunner {
     // Game Playing State: For Each Active Game: 
     //        Is Player’s Turn: Propose next move based on the GameState
     //        Not Player’s Turn: Poll game activeGames every 20 seconds until player’s turn
-    private State doGamePlaying(String username) {
+    private State doGamePlaying() {
         System.out.println("Entering Game Playing State:");
         try {
             do {
@@ -174,16 +190,18 @@ public class ModeTwoRunner {
 
                 activeGames.clear();
                 for (GameState gs : games)
-                    if (gs != null) activeGames.add(gs);
+                    if (gs != null && isAutomated(gs)) activeGames.add(gs);
 
                 System.out.println("\tI have " + activeGames.size() + " games");
 
                 boolean notMyTurn = false;
                 for (GameState gameState : activeGames) {
-                    boolean isMyTurn = (gameState.isPlayerOnesTurn && username.equals(gameState.playerOneUsername)) // 
-                            || (!gameState.isPlayerOnesTurn && username.equals(gameState.playerTwoUsername));
+                    boolean isPlayerOne = isPlayerOne(gameState);
+                    boolean isPlayerTwo = isPlayerTwo(gameState);
+                    boolean isMyTurn = (gameState.isPlayerOnesTurn && isPlayerOne) // 
+                            || (!gameState.isPlayerOnesTurn && isPlayerTwo);
 
-                    String opponent = username.equals(gameState.playerOneUsername) ? gameState.playerTwoUsername : gameState.playerOneUsername;
+                    String opponent = username.equals(gameState.playerOneUsername) && gameState.playerOneIsAutomated ? gameState.playerTwoUsername : gameState.playerOneUsername;
 
                     System.out.println("\tGame Id " + gameState.id + "; " + ((isMyTurn) ? "It's my turn" : "It's not my turn, waiting on " + opponent));
 
@@ -249,7 +267,7 @@ public class ModeTwoRunner {
     // Join Game State: POST request to join the first Available Open Game.  
     //      On success move to Game Playing State
     //      On failure move to Open Game State
-    private State doJoinGame(String username) {
+    private State doJoinGame() {
         System.out.println("Entering Join Game State:");
 
         if (allOpenGames.isEmpty()) return State.OpenGame;
@@ -274,7 +292,7 @@ public class ModeTwoRunner {
     }
 
     // New Game State: POST request to create a new game; Move to Open Game State
-    private State doNewGame(String username) {
+    private State doNewGame() {
         System.out.println("Entering New Game State:");
 
         try {
@@ -319,7 +337,7 @@ public class ModeTwoRunner {
 
                 myOpenGames.clear();
                 for (GameState gs : games)
-                    if (gs != null) myOpenGames.add(gs);
+                    if (gs != null && isAutomated(gs)) myOpenGames.add(gs);
 
                 if (myOpenGames.size() < myOpenGameCount) {
                     myOpenGameCount = myOpenGames.size();
@@ -333,9 +351,9 @@ public class ModeTwoRunner {
 
                     allOpenGames.clear();
                     for (GameState gs : games)
-                        if (gs != null) allOpenGames.add(gs);
+                        if (gs != null && !isPlayerOne(gs) && !isPlayerTwo(gs)) allOpenGames.add(gs);
 
-                    if (allOpenGames.isEmpty()) return State.NewGame;
+                    if (allOpenGames.size() < 3) return State.NewGame;
                     else return State.JoinGame;
                 }
 
