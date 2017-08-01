@@ -1,0 +1,58 @@
+This is an dependency for the morris-game-client-wrapper.
+
+Requirements:
+	Java 8 Installed
+
+Dependency:
+	Requires: morris-game-common
+	
+To compile and install into your local maven repo run:
+	mvn clean install
+	
+This will create the following jar:
+	./target/morris-game-client-wrapper-1.1-final.jar
+	
+You can copy this jar file to a more convenient location. 
+	
+The Client Wrapper can run in two modes:
+	Mode 1 runs as a web-server and needs to have an IP accessible from the internet.
+	Mode 2 runs as a client and calls the server.  Mode 2 is probably the easier to use.
+	
+Client Wrapper Running in Mode 1
+
+Description: The client wrapper runs as a stand-alone web server and listens for inbound move requests from the Game Server.
+Move requests from the Game Server come in as API end-point calls to "api/clientWrapper".
+The wrapper creates a Move Input File, runs the command you specified for your algorithm, and returns your
+move to the Game Server. When starting the Client Wrapper you can specify the port number for it to listen on.
+
+Requirements:
+	An IP address & Port that's reachable from the internet that you can run the client wrapper from.
+Usage:
+	(ex.) java -jar morris-game-client-wrapper-1.1-final.jar mode1 PORT_NUM OPENING_COMMAND MID_END_GAME_COMMAND
+
+Argument Details:
+	PORT_NUM: What port between 1025 & 65535 for the client wrapper to listen on.
+	
+
+Client Wrapper Running in Mode 2
+
+Description: The client wrapper runs as a web client and makes calls to the server, creating & playing games like
+you would if you were playing through the browser.
+
+Usage:
+	(ex.) java -jar morris-game-client-wrapper-1.1-final.jar mode2 USERNAME PASSWORD "GAME_SERVER_URL" OPENING_COMMAND MID_END_GAME_COMMAND
+
+Common Argument Details:
+
+	OPENING_COMMAND & MID_END_GAME_COMMAND: Text files that say what command line command to run to get a move.
+
+	(ex.) OPENING_COMMAND: java -cp my-project.jar ABOpening MOVE_INPUT_FILE* MOVE_OUTPUT_FILE* 6
+
+	MID_END_GAME_COMMAND follows the same basic format as the OPENING_COMMAND
+	
+	You would need to replace the contents of the OPENING_COMMAND & MID_END_GAME_COMMAND with the appropriate
+	commands to run your algorithm.
+	
+	*Note: Leave "MOVE_INPUT_FILE" & "MOVE_OUTPUT_FILE" as the name of the input/output files.
+	The Client Wrapper replaces these with a MOVE_INPUT_FILE_(current timestamp).txt when executing your command.
+	
