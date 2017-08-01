@@ -1,4 +1,4 @@
-This is an dependency for the morris-game-client-wrapper.
+A client wrapper for the morris game server.
 
 Requirements:
 	Java 8 Installed
